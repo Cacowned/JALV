@@ -28,27 +28,83 @@ namespace JALV.Core.Providers
             if (!file.Exists)
                 throw new FileNotFoundException("file not found", dataSource);
 
-            Regex regex = new Regex(@"%\b(date|message|level)\b");
+            Regex regex = CreateRegex(pattern); // new Regex(@"%\b(date|message|level)\b");
             MatchCollection matches = regex.Matches(pattern);
+
+            LogItem lastEntry = null;
 
             using (StreamReader reader = file.OpenText())
             {
                 string s;
+                var entryId = 1;
                 while ((s = reader.ReadLine()) != null)
                 {
                     string[] items = s.Split(new[] { Separator }, StringSplitOptions.RemoveEmptyEntries);
-                    LogItem entry = CreateEntry(items, matches);
+
+                    var match = regex.Match(s);
+
+                    if (!match.Success)
+                    {
+                        lastEntry.Throwable += s;
+                        continue;
+                    }
+                    LogItem entry = CreateEntry(match, entryId++);//items, matches);
                     entry.Logger = filter.Logger;
+
+                    if (lastEntry?.TimeStamp != null)
+                        entry.Delta = (entry.TimeStamp - lastEntry.TimeStamp).TotalSeconds;
+
+                    lastEntry = entry;
                     yield return entry;
                 }
-            }            
+            }
         }
+
+        private static LogItem CreateEntry(Match match, int entryId)
+        {
+            LogItem entry = new LogItem()
+            {
+                Id = entryId
+            };
+
+            entry.TimeStamp = DateTime.ParseExact(
+                            match.Groups["Date"].Value, DateTimeFormat, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal);
+
+            entry.Message = match.Groups["Message"].Value;
+            entry.Level = match.Groups["Level"].Value;
+            entry.Thread = match.Groups["Thread"].Value;
+            return entry;
+        }
+
+        private Regex CreateRegex(string pattern)
+        {
+            string newPattern = pattern;
+            foreach (var kvp in patternRegexMapping)
+            {
+                newPattern = newPattern.Replace(kvp.Key, kvp.Value);
+            }
+
+            return new Regex(newPattern);
+        }
+
+        Dictionary<string, string> patternRegexMapping = new Dictionary<string, string>
+        {
+            { "[", @"\[" },
+            { "]", @"\]" },
+            { "%date", @"(?<Date>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})" },
+            { "%thread", @"(?<Thread>\d+)"},
+            { "%-5level", @"(?<Level>[A-Z]{4,5})" },
+            { "%logger" , @".*" },
+            { "%property{NDC}", @".*" },
+            { "%message", @"(?<Message>.*)" },
+            { "%newline", "$" },
+        };
 
         private static LogItem CreateEntry(string[] items, MatchCollection matches)
         {
-            if (items == null) 
+            if (items == null)
                 throw new ArgumentNullException("items");
-            if (matches == null) 
+            if (matches == null)
                 throw new ArgumentNullException("matches");
 
             if (items.Length != matches.Count)

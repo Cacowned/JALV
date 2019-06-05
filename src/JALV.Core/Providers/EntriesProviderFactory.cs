@@ -9,6 +9,9 @@ namespace JALV.Core.Providers
         {
             switch (type)
             {
+                case EntriesProviderType.Text:
+                    return new FileEntriesProvider();
+
                 case EntriesProviderType.Json:
                     return new JsonEntriesProvider();
 

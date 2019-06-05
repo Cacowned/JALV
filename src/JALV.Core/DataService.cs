@@ -33,7 +33,7 @@ namespace JALV.Core
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Trace.TraceError("Error saving Favorites list [{0}]:\r\n{1}\r\n{2}",path,ex.Message,ex.StackTrace);
+                System.Diagnostics.Trace.TraceError("Error saving Favorites list [{0}]:\r\n{1}\r\n{2}", path, ex.Message, ex.StackTrace);
                 throw;
             }
             finally
@@ -43,7 +43,7 @@ namespace JALV.Core
                 if (fileStream != null)
                     fileStream.Close();
             }
-           
+
         }
 
         public static IList<PathItem> ParseFolderFile(string path)
@@ -97,24 +97,32 @@ namespace JALV.Core
             IEnumerable<LogItem> result = null;
             try
             {
-                AbstractEntriesProvider provider;
-
-                if (Path.GetExtension(path) == ".json")
-                {
-                    provider = EntriesProviderFactory.GetProvider(EntriesProviderType.Json);
-                }
-                else
-                {
-                    provider = EntriesProviderFactory.GetProvider();
-                }
-
-                result = provider.GetEntries(path);
+                
+                AbstractEntriesProvider provider = EntriesProviderFactory.GetProvider(GetProviderTypeFor(new FileInfo(path).Extension));
+                result = provider.GetEntries(path, new FilterParams {
+                    Pattern = "%date [%thread] %-5level %logger [%property{NDC}] - %message%newline"
+                });
                 return result.ToList();
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Trace.TraceError("Error parsing log file [{0}]:\r\n{1}\r\n{2}", path, ex.Message, ex.StackTrace);
                 throw;
+            }
+        }
+
+        private static EntriesProviderType GetProviderTypeFor(string extension)
+        {
+            switch (extension)
+            {
+                case ".xml":
+                    return EntriesProviderType.Xml;
+                case ".txt":
+                    return EntriesProviderType.Text;
+                case ".json":
+                    return EntriesProviderType.Json;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(extension));
             }
         }
     }
